@@ -1,0 +1,638 @@
+{
+  "info": {
+    "name": "Sistema de Turnos Online API",
+    "description": "Colección completa de endpoints para el sistema de turnos médicos",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Autenticación",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', response.data.tokens.accessToken);",
+                  "    pm.test('Login exitoso', function () {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Error en login', function () {",
+                  "        pm.response.to.have.status(401);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@turnos.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Registro de Usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nuevo@usuario.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Pérez\",\n  \"role\": \"patient\",\n  \"phone\": \"+54911234567\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Obtener Perfil",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Verificar Token",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "verify"]
+            }
+          }
+        },
+        {
+          "name": "Cambiar Contraseña",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"nuevaPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/change-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "change-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏥 Clínicas",
+      "item": [
+        {
+          "name": "Listar Clínicas",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/clinics?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clinics"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener Clínica por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/clinics/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clinics", "1"]
+            }
+          }
+        },
+        {
+          "name": "Crear Clínica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Clínica Nueva\",\n  \"address\": \"Av. Rivadavia 1234, CABA\",\n  \"phone\": \"+54114567890\",\n  \"email\": \"info@clinicanueva.com\",\n  \"city\": \"Buenos Aires\",\n  \"state\": \"CABA\",\n  \"postalCode\": \"1010\",\n  \"openingHours\": {\n    \"monday\": {\"start\": \"08:00\", \"end\": \"18:00\"},\n    \"tuesday\": {\"start\": \"08:00\", \"end\": \"18:00\"},\n    \"wednesday\": {\"start\": \"08:00\", \"end\": \"18:00\"},\n    \"thursday\": {\"start\": \"08:00\", \"end\": \"18:00\"},\n    \"friday\": {\"start\": \"08:00\", \"end\": \"17:00\"}\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clinics",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clinics"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Clínica",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Clínica Actualizada\",\n  \"phone\": \"+54114567899\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clinics/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clinics", "1"]
+            }
+          }
+        },
+        {
+          "name": "Obtener Ciudades",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/clinics/cities",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clinics", "cities"]
+            }
+          }
+        },
+        {
+          "name": "Estadísticas de Clínica",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/clinics/1/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clinics", "1", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👨‍⚕️ Médicos",
+      "item": [
+        {
+          "name": "Listar Médicos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/doctors?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener Médico por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/doctors/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "1"]
+            }
+          }
+        },
+        {
+          "name": "Crear Médico",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 2,\n  \"clinicId\": 1,\n  \"specialtyId\": 1,\n  \"licenseNumber\": \"MP123456\",\n  \"consultationDuration\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/doctors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Médico",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consultationDuration\": 45\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/doctors/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "1"]
+            }
+          }
+        },
+        {
+          "name": "Obtener Especialidades",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/doctors/specialties",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "specialties"]
+            }
+          }
+        },
+        {
+          "name": "Horarios del Médico",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/doctors/1/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "1", "schedules"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Horarios",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedules\": [\n    {\n      \"dayOfWeek\": 1,\n      \"startTime\": \"08:00\",\n      \"endTime\": \"12:00\",\n      \"isActive\": true\n    },\n    {\n      \"dayOfWeek\": 1,\n      \"startTime\": \"14:00\",\n      \"endTime\": \"18:00\",\n      \"isActive\": true\n    },\n    {\n      \"dayOfWeek\": 2,\n      \"startTime\": \"08:00\",\n      \"endTime\": \"16:00\",\n      \"isActive\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/doctors/1/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "1", "schedules"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 Pacientes",
+      "item": [
+        {
+          "name": "Listar Pacientes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/patients?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener Paciente por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/patients/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients", "1"]
+            }
+          }
+        },
+        {
+          "name": "Crear Paciente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 3,\n  \"birthDate\": \"1990-05-15\",\n  \"gender\": \"M\",\n  \"bloodType\": \"O+\",\n  \"medicalHistory\": \"Sin antecedentes relevantes\",\n  \"emergencyContactName\": \"María Pérez\",\n  \"emergencyContactPhone\": \"+54911111111\",\n  \"insuranceProvider\": \"OSDE\",\n  \"insuranceNumber\": \"123456789\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/patients",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Paciente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bloodType\": \"A+\",\n  \"medicalHistory\": \"Hipertensión controlada\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/patients/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients", "1"]
+            }
+          }
+        },
+        {
+          "name": "Historial Médico",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/patients/1/history",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients", "1", "history"]
+            }
+          }
+        },
+        {
+          "name": "Próximos Turnos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/patients/1/upcoming",
+              "host": ["{{base_url}}"],
+              "path": ["api", "patients", "1", "upcoming"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📅 Turnos",
+      "item": [
+        {
+          "name": "Listar Turnos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/appointments?page=1&limit=10&status=scheduled",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"},
+                {"key": "status", "value": "scheduled"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener Turno por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/appointments/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "1"]
+            }
+          }
+        },
+        {
+          "name": "Crear Turno",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": 1,\n  \"doctorId\": 1,\n  \"clinicId\": 1,\n  \"appointmentDate\": \"2024-03-15\",\n  \"appointmentTime\": \"14:30\",\n  \"reason\": \"Control médico rutinario\",\n  \"notes\": \"Paciente en ayunas\",\n  \"duration\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/appointments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Turno",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appointmentTime\": \"15:00\",\n  \"notes\": \"Cambio de horario solicitado por paciente\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/appointments/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "1"]
+            }
+          }
+        },
+        {
+          "name": "Confirmar Turno",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{base_url}}/api/appointments/1/confirm",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "1", "confirm"]
+            }
+          }
+        },
+        {
+          "name": "Cancelar Turno",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellationReason\": \"Paciente enfermo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/appointments/1/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "1", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Completar Turno",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Consulta completada. Paciente en buen estado general.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/appointments/1/complete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "1", "complete"]
+            }
+          }
+        },
+        {
+          "name": "Verificar Disponibilidad",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/appointments/availability/1/2024-03-15",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "availability", "1", "2024-03-15"]
+            }
+          }
+        },
+        {
+          "name": "Turnos de Hoy",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/appointments/today",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "today"]
+            }
+          }
+        },
+        {
+          "name": "Estadísticas de Turnos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/appointments/stats?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "stats"],
+              "query": [
+                {"key": "period", "value": "month"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 Utilidades",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "Documentación Swagger",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api-docs",
+              "host": ["{{base_url}}"],
+              "path": ["api-docs"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

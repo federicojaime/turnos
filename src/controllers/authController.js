@@ -1,140 +1,10 @@
-const { executeQuery, findById, findAll, create, update, softDelete } = require('../config/database');
+const bcrypt = require('bcryptjs');
+const { executeQuery, findById } = require('../config/database');
+const { generateToken, generateRefreshToken, createTokenPayload, verifyRefreshToken } = require('../config/jwt');
 const { validationResult } = require('express-validator');
 
-// Obtener todas las clínicas
-const getAllClinics = async (req, res) => {
-    try {
-        const {
-            page = 1,
-            limit = 10,
-            search = '',
-            city = '',
-            orderBy = 'name',
-            orderDir = 'ASC'
-        } = req.query;
-
-        let whereClause = 'is_active = 1';
-        let queryParams = [];
-
-        // Filtro por búsqueda
-        if (search) {
-            whereClause += ' AND (name LIKE ? OR address LIKE ? OR email LIKE ?)';
-            const searchTerm = `%${search}%`;
-            queryParams.push(searchTerm, searchTerm, searchTerm);
-        }
-
-        // Filtro por ciudad
-        if (city) {
-            whereClause += ' AND city = ?';
-            queryParams.push(city);
-        }
-
-        const options = {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            orderBy,
-            orderDir: orderDir.toUpperCase(),
-            where: whereClause
-        };
-
-        // Ejecutar consulta personalizada para incluir parámetros
-        const offset = (page - 1) * limit;
-        const clinicsQuery = `
-            SELECT id, name, address, phone, email, city, state, postal_code, 
-                   opening_hours, created_at, updated_at
-            FROM clinics 
-            WHERE ${whereClause}
-            ORDER BY ${orderBy} ${orderDir}
-            LIMIT ${limit} OFFSET ${offset}
-        `;
-
-        const clinics = await executeQuery(clinicsQuery, queryParams);
-
-        // Contar total
-        const countQuery = `SELECT COUNT(*) as total FROM clinics WHERE ${whereClause}`;
-        const countResult = await executeQuery(countQuery, queryParams);
-        const total = countResult[0].total;
-
-        res.json({
-            success: true,
-            message: 'Clínicas obtenidas exitosamente',
-            data: clinics,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit)
-            }
-        });
-
-    } catch (error) {
-        console.error('Error obteniendo clínicas:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error interno del servidor'
-        });
-    }
-};
-
-// Obtener clínica por ID
-const getClinicById = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const clinicQuery = `
-            SELECT c.*,
-                   COUNT(DISTINCT d.id) as total_doctors,
-                   COUNT(DISTINCT a.id) as total_appointments_today
-            FROM clinics c
-            LEFT JOIN doctors d ON c.id = d.clinic_id AND d.is_active = 1
-            LEFT JOIN appointments a ON c.id = a.clinic_id AND DATE(a.appointment_date) = CURDATE()
-            WHERE c.id = ? AND c.is_active = 1
-            GROUP BY c.id
-        `;
-
-        const clinics = await executeQuery(clinicQuery, [id]);
-
-        if (clinics.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Clínica no encontrada'
-            });
-        }
-
-        const clinic = clinics[0];
-
-        // Obtener médicos de la clínica
-        const doctorsQuery = `
-            SELECT d.id, d.license_number, d.consultation_duration,
-                   u.first_name, u.last_name, u.email, u.phone,
-                   s.name as specialty_name
-            FROM doctors d
-            JOIN users u ON d.user_id = u.id
-            JOIN specialties s ON d.specialty_id = s.id
-            WHERE d.clinic_id = ? AND d.is_active = 1 AND u.is_active = 1
-            ORDER BY u.last_name, u.first_name
-        `;
-
-        const doctors = await executeQuery(doctorsQuery, [id]);
-        clinic.doctors = doctors;
-
-        res.json({
-            success: true,
-            message: 'Clínica obtenida exitosamente',
-            data: clinic
-        });
-
-    } catch (error) {
-        console.error('Error obteniendo clínica:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error interno del servidor'
-        });
-    }
-};
-
-// Crear nueva clínica
-const createClinic = async (req, res) => {
+// Login de usuario
+const login = async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -145,67 +15,164 @@ const createClinic = async (req, res) => {
             });
         }
 
-        const {
-            name,
-            address,
-            phone,
-            email,
-            city,
-            state,
-            postalCode,
-            openingHours
-        } = req.body;
+        const { email, password } = req.body;
 
-        // Verificar si ya existe una clínica con el mismo nombre en la misma ciudad
-        const existingClinic = await executeQuery(
-            'SELECT id FROM clinics WHERE name = ? AND city = ? AND is_active = 1',
-            [name, city]
-        );
+        // Buscar usuario por email
+        const userQuery = `
+            SELECT id, email, password, first_name, last_name, role, phone, is_active 
+            FROM users 
+            WHERE email = ? AND is_active = 1
+        `;
+        const users = await executeQuery(userQuery, [email]);
 
-        if (existingClinic.length > 0) {
-            return res.status(409).json({
+        if (users.length === 0) {
+            return res.status(401).json({
                 success: false,
-                message: 'Ya existe una clínica con ese nombre en esta ciudad'
+                message: 'Credenciales inválidas'
             });
         }
 
-        // Validar y formatear horarios de apertura
-        let formattedOpeningHours = null;
-        if (openingHours) {
-            try {
-                formattedOpeningHours = JSON.stringify(openingHours);
-            } catch (error) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Formato de horarios de apertura inválido'
-                });
-            }
+        const user = users[0];
+
+        // Verificar contraseña
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({
+                success: false,
+                message: 'Credenciales inválidas'
+            });
         }
 
-        const clinicData = {
-            name,
-            address,
-            phone,
-            email,
-            city,
-            state,
-            postal_code: postalCode,
-            opening_hours: formattedOpeningHours
-        };
+        // Generar tokens
+        const tokenPayload = createTokenPayload(user);
+        const accessToken = generateToken(tokenPayload);
+        const refreshToken = generateRefreshToken(tokenPayload);
 
-        const clinicId = await create('clinics', clinicData);
+        // Obtener información adicional según el rol
+        let additionalInfo = {};
+        
+        if (user.role === 'patient') {
+            const patientQuery = `
+                SELECT id, birth_date, gender, medical_history 
+                FROM patients 
+                WHERE user_id = ? AND is_active = 1
+            `;
+            const patients = await executeQuery(patientQuery, [user.id]);
+            if (patients.length > 0) {
+                additionalInfo.patientId = patients[0].id;
+                additionalInfo.birthDate = patients[0].birth_date;
+                additionalInfo.gender = patients[0].gender;
+            }
+        } else if (user.role === 'secretary') {
+            const clinicsQuery = `
+                SELECT c.id, c.name 
+                FROM clinic_users cu
+                JOIN clinics c ON cu.clinic_id = c.id
+                WHERE cu.user_id = ? AND cu.is_active = 1 AND c.is_active = 1
+            `;
+            const clinics = await executeQuery(clinicsQuery, [user.id]);
+            additionalInfo.clinics = clinics;
+        }
+
+        res.json({
+            success: true,
+            message: 'Login exitoso',
+            data: {
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    role: user.role,
+                    phone: user.phone,
+                    ...additionalInfo
+                },
+                tokens: {
+                    accessToken,
+                    refreshToken,
+                    expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error en login:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
+// Registro de nuevo usuario (solo admin puede crear usuarios)
+const register = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Datos de entrada inválidos',
+                errors: errors.array()
+            });
+        }
+
+        const { email, password, firstName, lastName, role, phone } = req.body;
+
+        // Verificar si el email ya existe
+        const existingUser = await executeQuery(
+            'SELECT id FROM users WHERE email = ?',
+            [email]
+        );
+
+        if (existingUser.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: 'El email ya está registrado'
+            });
+        }
+
+        // Hashear contraseña
+        const saltRounds = 12;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Crear usuario
+        const insertQuery = `
+            INSERT INTO users (email, password, first_name, last_name, role, phone) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+        const result = await executeQuery(insertQuery, [
+            email,
+            hashedPassword,
+            firstName,
+            lastName,
+            role || 'patient',
+            phone
+        ]);
+
+        const userId = result.insertId;
+
+        // Si es paciente, crear registro en tabla patients
+        if (role === 'patient') {
+            await executeQuery(
+                'INSERT INTO patients (user_id) VALUES (?)',
+                [userId]
+            );
+        }
 
         res.status(201).json({
             success: true,
-            message: 'Clínica creada exitosamente',
+            message: 'Usuario creado exitosamente',
             data: {
-                id: clinicId,
-                ...clinicData
+                id: userId,
+                email,
+                firstName,
+                lastName,
+                role: role || 'patient'
             }
         });
 
     } catch (error) {
-        console.error('Error creando clínica:', error);
+        console.error('Error en registro:', error);
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
@@ -213,8 +180,110 @@ const createClinic = async (req, res) => {
     }
 };
 
-// Actualizar clínica
-const updateClinic = async (req, res) => {
+// Refresh token
+const refreshToken = async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(400).json({
+                success: false,
+                message: 'Refresh token requerido'
+            });
+        }
+
+        const decoded = verifyRefreshToken(refreshToken);
+        const user = await findById('users', decoded.id);
+        
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        const tokenPayload = createTokenPayload(user);
+        const newAccessToken = generateToken(tokenPayload);
+
+        res.json({
+            success: true,
+            message: 'Token renovado exitosamente',
+            data: {
+                accessToken: newAccessToken,
+                expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+            }
+        });
+
+    } catch (error) {
+        console.error('Error renovando token:', error);
+        res.status(401).json({
+            success: false,
+            message: 'Refresh token inválido o expirado'
+        });
+    }
+};
+
+// Obtener perfil del usuario actual
+const getProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const userQuery = `
+            SELECT id, email, first_name, last_name, role, phone, created_at, updated_at
+            FROM users 
+            WHERE id = ? AND is_active = 1
+        `;
+        const users = await executeQuery(userQuery, [userId]);
+
+        if (users.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        const user = users[0];
+        let profileData = { ...user };
+
+        if (user.role === 'patient') {
+            const patientQuery = `
+                SELECT id, birth_date, gender, blood_type, medical_history,
+                       emergency_contact_name, emergency_contact_phone,
+                       insurance_provider, insurance_number
+                FROM patients 
+                WHERE user_id = ? AND is_active = 1
+            `;
+            const patients = await executeQuery(patientQuery, [userId]);
+            if (patients.length > 0) {
+                profileData.patientData = patients[0];
+            }
+        } else if (user.role === 'secretary') {
+            const clinicsQuery = `
+                SELECT c.id, c.name, c.address, c.phone, c.city
+                FROM clinic_users cu
+                JOIN clinics c ON cu.clinic_id = c.id
+                WHERE cu.user_id = ? AND cu.is_active = 1 AND c.is_active = 1
+            `;
+            const clinics = await executeQuery(clinicsQuery, [userId]);
+            profileData.clinics = clinics;
+        }
+
+        res.json({
+            success: true,
+            message: 'Perfil obtenido exitosamente',
+            data: profileData
+        });
+
+    } catch (error) {
+        console.error('Error obteniendo perfil:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
+// Actualizar perfil del usuario
+const updateProfile = async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -225,79 +294,23 @@ const updateClinic = async (req, res) => {
             });
         }
 
-        const { id } = req.params;
-        const {
-            name,
-            address,
-            phone,
-            email,
-            city,
-            state,
-            postalCode,
-            openingHours
-        } = req.body;
+        const userId = req.user.id;
+        const { firstName, lastName, phone } = req.body;
 
-        // Verificar que la clínica existe
-        const existingClinic = await findById('clinics', id);
-        if (!existingClinic) {
-            return res.status(404).json({
-                success: false,
-                message: 'Clínica no encontrada'
-            });
-        }
-
-        // Verificar duplicados (excluyendo la clínica actual)
-        if (name && city) {
-            const duplicateClinic = await executeQuery(
-                'SELECT id FROM clinics WHERE name = ? AND city = ? AND id != ? AND is_active = 1',
-                [name, city, id]
-            );
-
-            if (duplicateClinic.length > 0) {
-                return res.status(409).json({
-                    success: false,
-                    message: 'Ya existe otra clínica con ese nombre en esta ciudad'
-                });
-            }
-        }
-
-        // Preparar datos para actualizar
-        const updateData = {};
-        if (name) updateData.name = name;
-        if (address) updateData.address = address;
-        if (phone) updateData.phone = phone;
-        if (email) updateData.email = email;
-        if (city) updateData.city = city;
-        if (state) updateData.state = state;
-        if (postalCode) updateData.postal_code = postalCode;
-
-        if (openingHours) {
-            try {
-                updateData.opening_hours = JSON.stringify(openingHours);
-            } catch (error) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Formato de horarios de apertura inválido'
-                });
-            }
-        }
-
-        const updated = await update('clinics', id, updateData);
-
-        if (!updated) {
-            return res.status(400).json({
-                success: false,
-                message: 'No se pudo actualizar la clínica'
-            });
-        }
+        const updateQuery = `
+            UPDATE users 
+            SET first_name = ?, last_name = ?, phone = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `;
+        await executeQuery(updateQuery, [firstName, lastName, phone, userId]);
 
         res.json({
             success: true,
-            message: 'Clínica actualizada exitosamente'
+            message: 'Perfil actualizado exitosamente'
         });
 
     } catch (error) {
-        console.error('Error actualizando clínica:', error);
+        console.error('Error actualizando perfil:', error);
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
@@ -305,62 +318,54 @@ const updateClinic = async (req, res) => {
     }
 };
 
-// Eliminar clínica (soft delete)
-const deleteClinic = async (req, res) => {
+// Cambiar contraseña
+const changePassword = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        // Verificar que la clínica existe
-        const existingClinic = await findById('clinics', id);
-        if (!existingClinic) {
-            return res.status(404).json({
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
                 success: false,
-                message: 'Clínica no encontrada'
+                message: 'Datos de entrada inválidos',
+                errors: errors.array()
             });
         }
 
-        // Verificar si tiene médicos activos
-        const activeDoctors = await executeQuery(
-            'SELECT COUNT(*) as count FROM doctors WHERE clinic_id = ? AND is_active = 1',
-            [id]
+        const userId = req.user.id;
+        const { currentPassword, newPassword } = req.body;
+
+        const userQuery = 'SELECT password FROM users WHERE id = ?';
+        const users = await executeQuery(userQuery, [userId]);
+
+        if (users.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        const isValidPassword = await bcrypt.compare(currentPassword, users[0].password);
+        if (!isValidPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Contraseña actual incorrecta'
+            });
+        }
+
+        const saltRounds = 12;
+        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        await executeQuery(
+            'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [hashedNewPassword, userId]
         );
 
-        if (activeDoctors[0].count > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No se puede eliminar la clínica porque tiene médicos activos'
-            });
-        }
-
-        // Verificar si tiene turnos futuros
-        const futureAppointments = await executeQuery(
-            'SELECT COUNT(*) as count FROM appointments WHERE clinic_id = ? AND appointment_date >= CURDATE() AND status NOT IN ("cancelled", "completed")',
-            [id]
-        );
-
-        if (futureAppointments[0].count > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No se puede eliminar la clínica porque tiene turnos futuros programados'
-            });
-        }
-
-        const deleted = await softDelete('clinics', id);
-
-        if (!deleted) {
-            return res.status(400).json({
-                success: false,
-                message: 'No se pudo eliminar la clínica'
-            });
-        }
-
         res.json({
             success: true,
-            message: 'Clínica eliminada exitosamente'
+            message: 'Contraseña cambiada exitosamente'
         });
 
     } catch (error) {
-        console.error('Error eliminando clínica:', error);
+        console.error('Error cambiando contraseña:', error);
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
@@ -368,45 +373,14 @@ const deleteClinic = async (req, res) => {
     }
 };
 
-// Obtener estadísticas de la clínica
-const getClinicStats = async (req, res) => {
+const logout = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        // Verificar que la clínica existe
-        const existingClinic = await findById('clinics', id);
-        if (!existingClinic) {
-            return res.status(404).json({
-                success: false,
-                message: 'Clínica no encontrada'
-            });
-        }
-
-        const statsQuery = `
-            SELECT 
-                COUNT(DISTINCT d.id) as total_doctors,
-                COUNT(DISTINCT p.id) as total_patients,
-                COUNT(DISTINCT CASE WHEN a.appointment_date = CURDATE() THEN a.id END) as appointments_today,
-                COUNT(DISTINCT CASE WHEN a.appointment_date >= CURDATE() AND a.status = 'scheduled' THEN a.id END) as upcoming_appointments,
-                COUNT(DISTINCT CASE WHEN a.appointment_date < CURDATE() AND a.status = 'completed' THEN a.id END) as completed_appointments,
-                COUNT(DISTINCT CASE WHEN a.status = 'cancelled' THEN a.id END) as cancelled_appointments
-            FROM clinics c
-            LEFT JOIN doctors d ON c.id = d.clinic_id AND d.is_active = 1
-            LEFT JOIN appointments a ON c.id = a.clinic_id
-            LEFT JOIN patients p ON a.patient_id = p.id AND p.is_active = 1
-            WHERE c.id = ? AND c.is_active = 1
-        `;
-
-        const stats = await executeQuery(statsQuery, [id]);
-
         res.json({
             success: true,
-            message: 'Estadísticas obtenidas exitosamente',
-            data: stats[0]
+            message: 'Logout exitoso'
         });
-
     } catch (error) {
-        console.error('Error obteniendo estadísticas:', error);
+        console.error('Error en logout:', error);
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
@@ -414,26 +388,17 @@ const getClinicStats = async (req, res) => {
     }
 };
 
-// Obtener ciudades disponibles
-const getCities = async (req, res) => {
+const verifyToken = async (req, res) => {
     try {
-        const citiesQuery = `
-            SELECT DISTINCT city 
-            FROM clinics 
-            WHERE is_active = 1 AND city IS NOT NULL AND city != ''
-            ORDER BY city ASC
-        `;
-
-        const cities = await executeQuery(citiesQuery);
-
         res.json({
             success: true,
-            message: 'Ciudades obtenidas exitosamente',
-            data: cities.map(row => row.city)
+            message: 'Token válido',
+            data: {
+                user: req.user
+            }
         });
-
     } catch (error) {
-        console.error('Error obteniendo ciudades:', error);
+        console.error('Error verificando token:', error);
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
@@ -442,11 +407,12 @@ const getCities = async (req, res) => {
 };
 
 module.exports = {
-    getAllClinics,
-    getClinicById,
-    createClinic,
-    updateClinic,
-    deleteClinic,
-    getClinicStats,
-    getCities
+    login,
+    register,
+    refreshToken,
+    getProfile,
+    updateProfile,
+    changePassword,
+    logout,
+    verifyToken
 };
