@@ -1,7 +1,7 @@
 const { executeQuery, findById, findAll, create, update, softDelete } = require('../config/database');
 const { validationResult } = require('express-validator');
 
-// Obtener todas las clínicas
+// Obtener todas las clínicas - PÚBLICO CON INFORMACIÓN BÁSICA
 const getAllClinics = async (req, res) => {
     try {
         const {
@@ -18,7 +18,7 @@ const getAllClinics = async (req, res) => {
 
         // Filtro por búsqueda
         if (search) {
-            whereClause += ' AND (name LIKE ? OR address LIKE ? OR email LIKE ?)';
+            whereClause += ' AND (name LIKE ? OR address LIKE ? OR city LIKE ?)';
             const searchTerm = `%${search}%`;
             queryParams.push(searchTerm, searchTerm, searchTerm);
         }
@@ -29,19 +29,18 @@ const getAllClinics = async (req, res) => {
             queryParams.push(city);
         }
 
-        const options = {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            orderBy,
-            orderDir: orderDir.toUpperCase(),
-            where: whereClause
-        };
-
-        // Ejecutar consulta personalizada para incluir parámetros
         const offset = (page - 1) * limit;
+        
+        // Información básica para público, completa para staff
+        let selectFields = 'id, name, address, phone, city, state, opening_hours';
+        
+        // Si es staff autenticado, mostrar información adicional
+        if (req.user && ['admin', 'secretary'].includes(req.user.role)) {
+            selectFields += ', email, postal_code, created_at, updated_at';
+        }
+
         const clinicsQuery = `
-            SELECT id, name, address, phone, email, city, state, postal_code, 
-                   opening_hours, created_at, updated_at
+            SELECT ${selectFields}
             FROM clinics 
             WHERE ${whereClause}
             ORDER BY ${orderBy} ${orderDir}
@@ -76,18 +75,33 @@ const getAllClinics = async (req, res) => {
     }
 };
 
-// Obtener clínica por ID
+// Obtener clínica por ID - PÚBLICO CON INFORMACIÓN BÁSICA
 const getClinicById = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Información básica para público
+        let selectFields = `
+            c.id, c.name, c.address, c.phone, c.city, c.state, c.opening_hours,
+            COUNT(DISTINCT d.id) as total_doctors
+        `;
+        
+        // Si es staff autenticado, mostrar información adicional
+        if (req.user && ['admin', 'secretary'].includes(req.user.role)) {
+            selectFields = `
+                c.*,
+                COUNT(DISTINCT d.id) as total_doctors,
+                COUNT(DISTINCT a.id) as total_appointments_today
+            `;
+        }
+
         const clinicQuery = `
-            SELECT c.*,
-                   COUNT(DISTINCT d.id) as total_doctors,
-                   COUNT(DISTINCT a.id) as total_appointments_today
+            SELECT ${selectFields}
             FROM clinics c
             LEFT JOIN doctors d ON c.id = d.clinic_id AND d.is_active = 1
-            LEFT JOIN appointments a ON c.id = a.clinic_id AND DATE(a.appointment_date) = CURDATE()
+            ${req.user && ['admin', 'secretary'].includes(req.user.role) 
+                ? 'LEFT JOIN appointments a ON c.id = a.clinic_id AND DATE(a.appointment_date) = CURDATE()' 
+                : ''}
             WHERE c.id = ? AND c.is_active = 1
             GROUP BY c.id
         `;
@@ -103,10 +117,10 @@ const getClinicById = async (req, res) => {
 
         const clinic = clinics[0];
 
-        // Obtener médicos de la clínica
+        // Obtener médicos de la clínica (información pública)
         const doctorsQuery = `
-            SELECT d.id, d.license_number, d.consultation_duration,
-                   u.first_name, u.last_name, u.email, u.phone,
+            SELECT d.id, d.consultation_duration,
+                   u.first_name, u.last_name,
                    s.name as specialty_name
             FROM doctors d
             JOIN users u ON d.user_id = u.id
@@ -133,7 +147,7 @@ const getClinicById = async (req, res) => {
     }
 };
 
-// Crear nueva clínica
+// Crear nueva clínica (solo admin)
 const createClinic = async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -213,7 +227,7 @@ const createClinic = async (req, res) => {
     }
 };
 
-// Actualizar clínica
+// Actualizar clínica (solo admin)
 const updateClinic = async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -305,7 +319,7 @@ const updateClinic = async (req, res) => {
     }
 };
 
-// Eliminar clínica (soft delete)
+// Eliminar clínica (soft delete) - solo admin
 const deleteClinic = async (req, res) => {
     try {
         const { id } = req.params;
@@ -368,7 +382,7 @@ const deleteClinic = async (req, res) => {
     }
 };
 
-// Obtener estadísticas de la clínica
+// Obtener estadísticas de la clínica (solo staff)
 const getClinicStats = async (req, res) => {
     try {
         const { id } = req.params;
@@ -414,7 +428,7 @@ const getClinicStats = async (req, res) => {
     }
 };
 
-// Obtener ciudades disponibles
+// Obtener ciudades disponibles (público)
 const getCities = async (req, res) => {
     try {
         const citiesQuery = `

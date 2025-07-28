@@ -17,17 +17,50 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middlewares globales
-app.use(helmet());
-app.use(cors({
-    origin: process.env.FRONTEND_URL || '*',
-    credentials: true
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
+// Configuración CORS mejorada
+app.use(cors({
+    origin: [
+        'http://localhost:3000',
+        'http://localhost:5173',  // Vite por defecto
+        'http://localhost:3001',  // React por defecto alternativo
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000',
+        process.env.FRONTEND_URL
+    ].filter(Boolean), // Filtra valores undefined/null
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'Cache-Control',
+        'Pragma'
+    ],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400 // 24 horas
+}));
+
+// Middleware para manejar preflight requests
+app.options('*', cors());
+
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Documentación Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Middleware de logging para debug
+app.use((req, res, next) => {
+    console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+    next();
+});
 
 // Rutas principales
 app.use('/api/auth', authRoutes);
@@ -42,7 +75,8 @@ app.get('/api/health', (req, res) => {
         status: 'OK', 
         message: 'Sistema de Turnos API funcionando correctamente',
         timestamp: new Date().toISOString(),
-        version: '1.0.0'
+        version: '1.0.0',
+        cors: 'enabled'
     });
 });
 
@@ -98,6 +132,7 @@ app.listen(PORT, () => {
     console.log(`📚 Documentación: http://localhost:${PORT}/api-docs`);
     console.log(`❤️  Health check: http://localhost:${PORT}/api/health`);
     console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 CORS habilitado para desarrollo`);
 });
 
 module.exports = app;

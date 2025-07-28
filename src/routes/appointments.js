@@ -61,9 +61,38 @@ const { authenticateToken, requireStaff, requirePatientAccess } = require('../mi
 
 /**
  * @swagger
+ * /api/appointments/availability/{doctorId}/{date}:
+ *   get:
+ *     summary: Obtener disponibilidad de un médico en una fecha (PÚBLICO)
+ *     tags: [Turnos]
+ *     parameters:
+ *       - in: path
+ *         name: doctorId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Disponibilidad obtenida exitosamente
+ *       404:
+ *         description: Médico no encontrado
+ */
+router.get('/availability/:doctorId/:date', [
+    param('doctorId').isInt().withMessage('ID de médico debe ser un número entero'),
+    param('date').isDate().withMessage('Fecha debe ser válida (YYYY-MM-DD)')
+], getDoctorAvailability);
+
+/**
+ * @swagger
  * /api/appointments:
  *   get:
- *     summary: Obtener todos los turnos
+ *     summary: Obtener todos los turnos (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -126,7 +155,7 @@ router.get('/', [
  * @swagger
  * /api/appointments/today:
  *   get:
- *     summary: Obtener turnos de hoy
+ *     summary: Obtener turnos de hoy (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -154,7 +183,7 @@ router.get('/today', [
  * @swagger
  * /api/appointments/stats:
  *   get:
- *     summary: Obtener estadísticas de turnos
+ *     summary: Obtener estadísticas de turnos (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -187,41 +216,9 @@ router.get('/stats', [
 
 /**
  * @swagger
- * /api/appointments/availability/{doctorId}/{date}:
- *   get:
- *     summary: Obtener disponibilidad de un médico en una fecha
- *     tags: [Turnos]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: doctorId
- *         required: true
- *         schema:
- *           type: integer
- *       - in: path
- *         name: date
- *         required: true
- *         schema:
- *           type: string
- *           format: date
- *     responses:
- *       200:
- *         description: Disponibilidad obtenida exitosamente
- *       404:
- *         description: Médico no encontrado
- */
-router.get('/availability/:doctorId/:date', [
-    authenticateToken,
-    param('doctorId').isInt().withMessage('ID de médico debe ser un número entero'),
-    param('date').isDate().withMessage('Fecha debe ser válida (YYYY-MM-DD)')
-], getDoctorAvailability);
-
-/**
- * @swagger
  * /api/appointments/{id}:
  *   get:
- *     summary: Obtener turno por ID
+ *     summary: Obtener turno por ID (solo staff o paciente propietario)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -246,7 +243,7 @@ router.get('/:id', [
  * @swagger
  * /api/appointments:
  *   post:
- *     summary: Crear nuevo turno
+ *     summary: Crear nuevo turno (staff o pacientes autenticados)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -265,8 +262,7 @@ router.get('/:id', [
  *         description: Horario no disponible
  */
 router.post('/', [
-    authenticateToken,
-    requireStaff,
+    authenticateToken, // Cualquier usuario autenticado puede crear turnos
     body('patientId')
         .isInt()
         .withMessage('ID de paciente debe ser un número entero'),
@@ -312,7 +308,7 @@ router.post('/', [
  * @swagger
  * /api/appointments/{id}:
  *   put:
- *     summary: Actualizar turno
+ *     summary: Actualizar turno (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -387,7 +383,7 @@ router.put('/:id', [
  * @swagger
  * /api/appointments/{id}/cancel:
  *   put:
- *     summary: Cancelar turno
+ *     summary: Cancelar turno (staff o paciente propietario)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -424,7 +420,7 @@ router.put('/:id/cancel', [
  * @swagger
  * /api/appointments/{id}/confirm:
  *   put:
- *     summary: Confirmar turno
+ *     summary: Confirmar turno (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -448,7 +444,7 @@ router.put('/:id/confirm', [
  * @swagger
  * /api/appointments/{id}/complete:
  *   put:
- *     summary: Completar turno
+ *     summary: Completar turno (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []
@@ -486,7 +482,7 @@ router.put('/:id/complete', [
  * @swagger
  * /api/appointments/{id}:
  *   delete:
- *     summary: Eliminar turno
+ *     summary: Eliminar turno (solo staff)
  *     tags: [Turnos]
  *     security:
  *       - bearerAuth: []

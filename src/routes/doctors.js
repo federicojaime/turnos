@@ -13,30 +13,26 @@ const {
     getSpecialties
 } = require('../controllers/doctorController');
 
-const { authenticateToken, requireStaff, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireStaff, requireAdmin, optionalAuth } = require('../middleware/auth');
 
 /**
  * @swagger
  * /api/doctors/specialties:
  *   get:
- *     summary: Obtener especialidades médicas
+ *     summary: Obtener especialidades médicas (PÚBLICO)
  *     tags: [Médicos]
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Especialidades obtenidas exitosamente
  */
-router.get('/specialties', authenticateToken, getSpecialties);
+router.get('/specialties', getSpecialties);
 
 /**
  * @swagger
  * /api/doctors:
  *   get:
- *     summary: Listar médicos
+ *     summary: Listar médicos (PÚBLICO - información básica)
  *     tags: [Médicos]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -68,8 +64,7 @@ router.get('/specialties', authenticateToken, getSpecialties);
  *         description: Lista de médicos obtenida exitosamente
  */
 router.get('/', [
-    authenticateToken,
-    requireStaff,
+    optionalAuth, // Permite acceso público pero detecta si hay usuario logueado
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('clinicId').optional().isInt(),
@@ -80,10 +75,8 @@ router.get('/', [
  * @swagger
  * /api/doctors/{id}:
  *   get:
- *     summary: Obtener médico por ID
+ *     summary: Obtener médico por ID (PÚBLICO - información básica)
  *     tags: [Médicos]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -97,8 +90,7 @@ router.get('/', [
  *         description: Médico no encontrado
  */
 router.get('/:id', [
-    authenticateToken,
-    requireStaff,
+    optionalAuth,
     param('id').isInt().withMessage('ID debe ser un número entero')
 ], getDoctorById);
 
@@ -106,10 +98,8 @@ router.get('/:id', [
  * @swagger
  * /api/doctors/{id}/schedules:
  *   get:
- *     summary: Obtener horarios del médico
+ *     summary: Obtener horarios del médico (PÚBLICO)
  *     tags: [Médicos]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -121,8 +111,6 @@ router.get('/:id', [
  *         description: Horarios obtenidos exitosamente
  */
 router.get('/:id/schedules', [
-    authenticateToken,
-    requireStaff,
     param('id').isInt().withMessage('ID debe ser un número entero')
 ], getDoctorSchedules);
 
@@ -130,7 +118,7 @@ router.get('/:id/schedules', [
  * @swagger
  * /api/doctors:
  *   post:
- *     summary: Crear médico
+ *     summary: Crear médico (solo admin)
  *     tags: [Médicos]
  *     security:
  *       - bearerAuth: []
@@ -187,7 +175,7 @@ router.post('/', [
  * @swagger
  * /api/doctors/{id}:
  *   put:
- *     summary: Actualizar médico
+ *     summary: Actualizar médico (solo admin)
  *     tags: [Médicos]
  *     security:
  *       - bearerAuth: []
@@ -243,7 +231,7 @@ router.put('/:id', [
  * @swagger
  * /api/doctors/{id}/schedules:
  *   put:
- *     summary: Actualizar horarios del médico
+ *     summary: Actualizar horarios del médico (solo admin)
  *     tags: [Médicos]
  *     security:
  *       - bearerAuth: []
@@ -310,7 +298,7 @@ router.put('/:id/schedules', [
  * @swagger
  * /api/doctors/{id}:
  *   delete:
- *     summary: Eliminar médico
+ *     summary: Eliminar médico (solo admin)
  *     tags: [Médicos]
  *     security:
  *       - bearerAuth: []

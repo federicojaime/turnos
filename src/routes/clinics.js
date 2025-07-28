@@ -12,7 +12,7 @@ const {
     getCities
 } = require('../controllers/clinicController');
 
-const { authenticateToken, requireAdmin, requireStaff } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, requireStaff, optionalAuth } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -62,10 +62,8 @@ const { authenticateToken, requireAdmin, requireStaff } = require('../middleware
  * @swagger
  * /api/clinics:
  *   get:
- *     summary: Obtener todas las clínicas
+ *     summary: Obtener todas las clínicas (PÚBLICO)
  *     tags: [Clínicas]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -93,30 +91,26 @@ const { authenticateToken, requireAdmin, requireStaff } = require('../middleware
  *       200:
  *         description: Lista de clínicas obtenida exitosamente
  */
-router.get('/', authenticateToken, requireStaff, getAllClinics);
+router.get('/', optionalAuth, getAllClinics);
 
 /**
  * @swagger
  * /api/clinics/cities:
  *   get:
- *     summary: Obtener ciudades disponibles
+ *     summary: Obtener ciudades disponibles (PÚBLICO)
  *     tags: [Clínicas]
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Lista de ciudades
  */
-router.get('/cities', authenticateToken, getCities);
+router.get('/cities', getCities);
 
 /**
  * @swagger
  * /api/clinics/{id}:
  *   get:
- *     summary: Obtener clínica por ID
+ *     summary: Obtener clínica por ID (PÚBLICO)
  *     tags: [Clínicas]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -130,13 +124,13 @@ router.get('/cities', authenticateToken, getCities);
  *       404:
  *         description: Clínica no encontrada
  */
-router.get('/:id', authenticateToken, requireStaff, getClinicById);
+router.get('/:id', optionalAuth, getClinicById);
 
 /**
  * @swagger
  * /api/clinics/{id}/stats:
  *   get:
- *     summary: Obtener estadísticas de la clínica
+ *     summary: Obtener estadísticas de la clínica (SOLO STAFF)
  *     tags: [Clínicas]
  *     security:
  *       - bearerAuth: []
@@ -218,7 +212,7 @@ router.post('/', [
  * @swagger
  * /api/clinics/{id}:
  *   put:
- *     summary: Actualizar clínica
+ *     summary: Actualizar clínica (solo admin)
  *     tags: [Clínicas]
  *     security:
  *       - bearerAuth: []
